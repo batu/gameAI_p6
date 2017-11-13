@@ -141,6 +141,8 @@ class Individual_Grid(object):
 
 
 def offset_by_upto(val, variance, min=None, max=None):
+    #add to the value a value between 0 and sqrt(variance)
+    #capped by min and max values
     val += random.normalvariate(0, variance**0.5)
     if min is not None and val < min:
         val = min
@@ -201,23 +203,54 @@ class Individual_DE(object):
     def mutate(self, new_genome):
         # STUDENT How does this work?  Explain it in your writeup.
         # STUDENT consider putting more constraints on this, to prevent generating weird things
+
+        # It has a mutation chance of 10%.
+        # and ensures the genome has length.
+
+        # A genome has at most:
+        # x_position
+        # type
+        # width
+        # y_position
+        # a bool
+        # a choice
         if random.random() < 0.1 and len(new_genome) > 0:
+
+            # Decides what gene in genome to change.
             to_change = random.randint(0, len(new_genome) - 1)
+
+            # Saves the genome and makes a copy of it.
             de = new_genome[to_change]
             new_de = de
+
+            #Grabs the x component and the type.
             x = de[0]
             de_type = de[1]
+
+            #Now gets another random value.
             choice = random.random()
+
+            #Does something different based on what the type is.
+            # For allmost all types, the x or y values is slightly tweaked.
+            # For certain DE's there is a possibility that something else changes
+            # such as whether the block is breakable, or what kind of platform something is
+
+            # BLOCK
             if de_type == "4_block":
+                # Grab the y value and whether it is breakable.
                 y = de[2]
                 breakable = de[3]
+                # Changes the x or y position a little bit, or makes it not breakable?
                 if choice < 0.33:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
                 elif choice < 0.66:
                     y = offset_by_upto(y, height / 2, min=0, max=height - 1)
                 else:
+                    # Weird?
                     breakable = not de[3]
                 new_de = (x, de_type, y, breakable)
+
+            # Question Block
             elif de_type == "5_qblock":
                 y = de[2]
                 has_powerup = de[3]  # boolean
@@ -228,6 +261,7 @@ class Individual_DE(object):
                 else:
                     has_powerup = not de[3]
                 new_de = (x, de_type, y, has_powerup)
+
             elif de_type == "3_coin":
                 y = de[2]
                 if choice < 0.5:
@@ -235,6 +269,7 @@ class Individual_DE(object):
                 else:
                     y = offset_by_upto(y, height / 2, min=0, max=height - 1)
                 new_de = (x, de_type, y)
+
             elif de_type == "7_pipe":
                 h = de[2]
                 if choice < 0.5:
@@ -242,6 +277,7 @@ class Individual_DE(object):
                 else:
                     h = offset_by_upto(h, 2, min=2, max=height - 4)
                 new_de = (x, de_type, h)
+
             elif de_type == "0_hole":
                 w = de[2]
                 if choice < 0.5:
@@ -249,6 +285,7 @@ class Individual_DE(object):
                 else:
                     w = offset_by_upto(w, 4, min=1, max=width - 2)
                 new_de = (x, de_type, w)
+
             elif de_type == "6_stairs":
                 h = de[2]
                 dx = de[3]  # -1 or 1
@@ -259,6 +296,7 @@ class Individual_DE(object):
                 else:
                     dx = -dx
                 new_de = (x, de_type, h, dx)
+
             elif de_type == "1_platform":
                 w = de[2]
                 y = de[3]
@@ -272,6 +310,7 @@ class Individual_DE(object):
                 else:
                     madeof = random.choice(["?", "X", "B"])
                 new_de = (x, de_type, w, y, madeof)
+
             elif de_type == "2_enemy":
                 pass
             new_genome.pop(to_change)
@@ -347,7 +386,10 @@ class Individual_DE(object):
         # STUDENT Maybe enhance this
         elt_count = random.randint(8, 128)
         g = [random.choice([
+            # X position, width of hole
             (random.randint(1, width - 2), "0_hole", random.randint(1, 8)),
+
+            #X position, width, height, choice
             (random.randint(1, width - 2), "1_platform", random.randint(1, 8), random.randint(0, height - 1), random.choice(["?", "X", "B"])),
             (random.randint(1, width - 2), "2_enemy"),
             (random.randint(1, width - 2), "3_coin", random.randint(0, height - 1)),
@@ -360,8 +402,6 @@ class Individual_DE(object):
 
 
 Individual = Individual_Grid
-    
-
 
 def roulette_succession(pop):
     generation_size = len(pop)
