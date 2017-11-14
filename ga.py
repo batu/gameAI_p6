@@ -17,6 +17,7 @@ ELITISM = True
 SUCCESSION_METHOD = 1
 # 1 for Roulette Wheel
 # 2 for Tournament
+# 0 for just mutation
 
 CROSSOVER_METHOD = 1
 # 1 for Single Point Crossover
@@ -43,11 +44,11 @@ options = [
 """
 options = \
     ["X"] * 2 +\
-    ["-"] * 200 +\
+    ["-"] * 300 +\
     ["?"] * 2 +\
     ["M"] * 1 +\
     ["B"] * 5 +\
-    ["o"] * 2 +\
+    ["o"] * 10 +\
     ["T"] * 1 +\
     ["E"] * 2
 
@@ -77,7 +78,7 @@ class Individual_Grid(object):
         # STUDENT Modify this, and possibly add more metrics.  You can replace this with whatever code you like.
         coefficients = dict(
             meaningfulJumpVariance=0.5,
-            negativeSpace=0.6,
+            negativeSpace=0.9,
             pathPercentage=0.5,
             emptyPercentage=0.6,
             linearity=-0.5,
@@ -99,10 +100,10 @@ class Individual_Grid(object):
         # STUDENT also consider weighting the different tile types so it's not uniformly random
         # STUDENT consider putting more constraints on this to prevent pipes in the air, etc
 
-        evolution_rate = .01
+        evolution_rate = .025
 
         left = 1
-        right = width - 1
+        right = width - 3
 
         # Higher level mutation options
         # increase or decrease the width of the hole
@@ -112,8 +113,32 @@ class Individual_Grid(object):
         for y in range(height):
             for x in range(left, right):
                 if random.random() < evolution_rate:
-                    genome[y][x] = random.choice(options)
+                    if genome[y][x] in ["B", "?", "B", "M"]:
+                        try:
+                            rand_int = random.randint(-1,2)
+                            if genome[y + rand_int][x + rand_int] not in ["T","|"]:
+                                genome[y + rand_int][x + rand_int] = random.choice(["B", "?", "B", "M", "-"])
+                        except:
+                            pass
+                    elif genome[y][x] == "o":
+                        try:
+                            rand_int = random.randint(-1,2)
+                            if genome[y + rand_int][x + rand_int] not in ["T","|"]:
+                                genome[y + rand_int][x + rand_int] = random.choice(["o", "o", "o", "-"])
+                        except:
+                            pass
+
+                    elif y == height:
+                        if genome[y + rand_int][x + rand_int] not in ["T","|"]:
+                            genome[y][x] = random.choice("-","X")
+
+                    elif genome[y][x] not in ["|", "T"]:
+                        genome[y][x] = random.choice(["B", "?", "B", "M", "-"])
                 pass
+
+        genome[7][-1] = "v"
+        genome[8:14][-1] = ["f"] * 6
+        genome[14:16][-1] = ["X", "X"]
         return genome
 
     # Create zero or more children from self and other
@@ -128,8 +153,8 @@ class Individual_Grid(object):
         
         if CROSSOVER_METHOD == 1:
             left = 1
-            right = width - 1
-            for y in range(height):
+            right = width - 3
+            for y in range(height - 1):
                 cross_over_point = random.randint(left, right)
                 for x in range(left, right):
                     if x < cross_over_point:
@@ -171,27 +196,36 @@ class Individual_Grid(object):
         g = [random.choices(options, k=width) for row in range(height)]
         g[15][:] = ["X"] * width
         g[14][0] = "m"
-        g[7][-1] = "v"
-        g[8:14][-1] = ["f"] * 6
-        g[14:16][-1] = ["X", "X"]
-
 
 
         #Make sure the pipes are always connected to the ground
         left = 1
-        right = width - 1
+        right = width - 3
         count_t = 0
         for y in range(height):
             for x in range(left, right):
                 if g[y][x] == "T":
-                    count_t += 1
-                    try:
-                        i = 0
-                        while True:
-                            i += 1
-                            g[y + i][x] = "|"
-                    except IndexError:
-                        pass
+                    if y < 10:
+                        g[y][x] = "-"
+                    else:
+                        count_t += 1
+                        try:
+                            i = 0
+                            while True:
+                                i += 1
+                                g[y + i][x] = "|"
+                        except IndexError:
+                            pass
+
+        fall_percentage = 0.05
+        for x in range(left, right):
+            if random.random() < fall_percentage:
+                g[height - 1][x] = "-"
+
+        g[7][-1] = "v"
+        g[8:14][-1] = ["f"] * 6
+        g[14:16][-1] = ["X", "X"]
+
         return cls(g)
 
 
@@ -248,7 +282,16 @@ class Individual_DE(object):
 
         # Penalize 1 width gaps
         if len(list(filter(lambda de: de[1] == "0_holes" and de[2] == 1, self.genome))) > 1:
-            penalties -= 1
+            penalties -= 0.5
+
+        one_wide_gap_count = len(list(filter(lambda de: de[1] == "0_holes" and de[2] == 1, self.genome)))
+        penalties -= min(1, one_wide_gap_count * 0.1)
+
+
+        #Coins are fun! Add more of them
+        coin_count = len(list(filter(lambda de: de[1] == "3_coin", self.genome)))
+        penalties += coin_count * 0.05 if coin_count < 30 else -1
+
 
         # STUDENT If you go for the FI-2POP extra credit, you can put constraint calculation in here too and cache it in a new entry in __slots__.
         self._fitness = sum(map(lambda m: coefficients[m] * measurements[m],
@@ -274,7 +317,9 @@ class Individual_DE(object):
         # y_position
         # a bool
         # a choice
-        if random.random() < 0.1 and len(new_genome) > 0:
+
+        #Increased mutation chance
+        if random.random() < 0.15 and len(new_genome) > 0:
 
             # Decides what gene in genome to change.
             to_change = random.randint(0, len(new_genome) - 1)
@@ -286,6 +331,7 @@ class Individual_DE(object):
             #Grabs the x component and the type.
             x = de[0]
             de_type = de[1]
+            additional_de = None
 
             #Now gets another random value.
             choice = random.random()
@@ -309,7 +355,6 @@ class Individual_DE(object):
                 elif choice < 0.66:
                     y = offset_by_upto(y, height / 2, min=0, max=height - 1)
                 else:
-                    # Weird?
                     breakable = not de[3]
                 new_de = (x, de_type, y, breakable)
 
@@ -334,6 +379,12 @@ class Individual_DE(object):
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
                 else:
                     y = offset_by_upto(y, height / 2, min=0, max=height - 1)
+                if random.random() < 0.3:
+                    try:
+                        additional_de = new_genome[to_change + 1]
+                        additional_de = (additional_de[0], "3_coin", additional_de[2] )
+                    except:
+                        pass
                 new_de = (x, de_type, y)
 
             # Pipe
@@ -382,15 +433,21 @@ class Individual_DE(object):
                     w = offset_by_upto(w, 8, min=1, max=width - 2)
                 elif choice < 0.75:
                     y = offset_by_upto(y, height, min=0, max=height - 1)
-                else:
+                elif choice:
                     madeof = random.choice(["?", "X", "B"])
                 new_de = (x, de_type, w, y, madeof)
 
             # Does not mutate the enemy
             elif de_type == "2_enemy":
                 pass
+
             new_genome.pop(to_change)
             heapq.heappush(new_genome, new_de)
+
+            if additional_de:
+                new_genome.pop(to_change + 1)
+                heapq.heappush(new_genome, additional_de)
+
         return new_genome
 
     def generate_children(self, other):
@@ -471,7 +528,7 @@ class Individual_DE(object):
     @classmethod
     def random_individual(_cls):
         # STUDENT Maybe enhance this
-        elt_count = random.randint(8, 128)
+        elt_count = random.randint(32, 96)
         g = [random.choice([
             # X position, width of hole
             (random.randint(1, width - 2), "0_hole", random.randint(1, 8)),
@@ -488,7 +545,8 @@ class Individual_DE(object):
         return Individual_DE(g)
 
 
-Individual = Individual_Grid
+#Individual = Individual_Grid
+Individual = Individual_DE
 
 def roulette_succession(pop):
 
@@ -516,7 +574,7 @@ def roulette_succession(pop):
             # the negative values are not messing with the calculations
             current += (chromosome.fitness() +  min_fitness)
 
-            if current > pick:
+            if current > pick and len(chromosome.genome) != 0 and len(last_pick.genome) != 0:
                 new_child = chromosome.generate_children(last_pick)
                 last_pick = chromosome
                 new_generation += new_child
@@ -525,11 +583,17 @@ def roulette_succession(pop):
     new_sum_fitness = sum(chromosome.fitness() for chromosome in new_generation)
     mean_fitness = new_sum_fitness / generation_size
     print("The mean fitness is : {}".format(mean_fitness))
-    print(len(new_generation))
     return new_generation
 
 def tournament_succession(pop):
     return pop
+
+def mutation_succession(pop):
+    mutated_gen = []
+    for dude in pop:
+        mutated_gen += dude.mutate(dude)
+    return  mutated_gen
+
 
 # List of individual grid objects
 def generate_successors(population):
@@ -540,7 +604,8 @@ def generate_successors(population):
         results = roulette_succession(population)
     elif SUCCESSION_METHOD == 2:
         results = tournament_succession(population)
-        
+    elif SUCCESSION_METHOD == 0:
+        results = mutation_succession(population)
 
     # STUDENT Design and implement this
     # Hint: Call generate_children() on some individuals and fill up results.

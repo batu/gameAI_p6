@@ -14,6 +14,7 @@ def metrics(levelStr):
 
     def isSolid(tile):
         return tile in solids
+
     for yy in range(maxY - 2, -1, -1):
         if (levelStr[yy][curX] == '-' or levelStr[yy][curX] == '*') and isSolid(levelStr[yy + 1][curX]):
             curY = yy
