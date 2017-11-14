@@ -10,6 +10,10 @@ import math
 
 width = 200
 height = 16
+
+ELITISM = True
+#Do you want elitism?
+
 SUCCESSION_METHOD = 1
 # 1 for Roulette Wheel
 # 2 for Tournament
@@ -17,6 +21,9 @@ SUCCESSION_METHOD = 1
 CROSSOVER_METHOD = 1
 # 1 for Single Point Crossover
 
+# the multipliers change the frequiency.
+# the example level is used as a rough boilerplate
+"""
 options = [
     "-",  # an empty space
     "X",  # a solid wall
@@ -24,13 +31,31 @@ options = [
     "M",  # a question mark block with a mushroom
     "B",  # a breakable block
     "o",  # a coin
-    "|",  # a pipe segment
+
+    #Do not randomly generate a pipe segment. Just do it in conjunction with T
+    #"|",  # a pipe segment
     "T",  # a pipe top
     "E",  # an enemy
     #"f",  # a flag, do not generate
     #"v",  # a flagpole, do not generate
     #"m"  # mario's start position, do not generate
 ]
+"""
+options = \
+    ["X"] * 2 +\
+    ["-"] * 200 +\
+    ["?"] * 2 +\
+    ["M"] * 1 +\
+    ["B"] * 5 +\
+    ["o"] * 2 +\
+    ["T"] * 1 +\
+    ["E"] * 2
+
+    #Do not randomly generate a pipe segment. Just do it in conjunction with T
+    #"|",  # a pipe segment
+    #"f",  # a flag, do not generate
+    #"v",  # a flagpole, do not generate
+    #"m"  # mario's start position, do not generate
 
 # The level as a grid of tiles
 
@@ -74,10 +99,20 @@ class Individual_Grid(object):
         # STUDENT also consider weighting the different tile types so it's not uniformly random
         # STUDENT consider putting more constraints on this to prevent pipes in the air, etc
 
+        evolution_rate = .01
+
         left = 1
         right = width - 1
+
+        # Higher level mutation options
+        # increase or decrease the width of the hole
+        # Increase or decrease the height of the pipe
+        # Increase the flock of coins
+
         for y in range(height):
             for x in range(left, right):
+                if random.random() < evolution_rate:
+                    genome[y][x] = random.choice(options)
                 pass
         return genome
 
@@ -105,9 +140,11 @@ class Individual_Grid(object):
                         #new_genome_2[x][y] = this_genome[x][y]
                     # STUDENT Which one should you take?  Self, or other?  Why?
                     # STUDENT consider putting more constraints on this to prevent pipes in the air, etc
+
                     pass
         # do mutation; note we're returning a one-element tuple here
-        return (Individual_Grid(new_genome),)
+        mutated_genome = self.mutate(new_genome)
+        return (Individual_Grid(mutated_genome),)
 
     # Turn the genome into a level string (easy for this genome)
     def to_level(self):
@@ -137,6 +174,24 @@ class Individual_Grid(object):
         g[7][-1] = "v"
         g[8:14][-1] = ["f"] * 6
         g[14:16][-1] = ["X", "X"]
+
+
+
+        #Make sure the pipes are always connected to the ground
+        left = 1
+        right = width - 1
+        count_t = 0
+        for y in range(height):
+            for x in range(left, right):
+                if g[y][x] == "T":
+                    count_t += 1
+                    try:
+                        i = 0
+                        while True:
+                            i += 1
+                            g[y + i][x] = "|"
+                    except IndexError:
+                        pass
         return cls(g)
 
 
@@ -190,6 +245,11 @@ class Individual_DE(object):
         # STUDENT For example, too many stairs are unaesthetic.  Let's penalize that
         if len(list(filter(lambda de: de[1] == "6_stairs", self.genome))) > 5:
             penalties -= 2
+
+        # Penalize 1 width gaps
+        if len(list(filter(lambda de: de[1] == "0_holes" and de[2] == 1, self.genome))) > 1:
+            penalties -= 1
+
         # STUDENT If you go for the FI-2POP extra credit, you can put constraint calculation in here too and cache it in a new entry in __slots__.
         self._fitness = sum(map(lambda m: coefficients[m] * measurements[m],
                                 coefficients)) + penalties
@@ -234,8 +294,11 @@ class Individual_DE(object):
             # For allmost all types, the x or y values is slightly tweaked.
             # For certain DE's there is a possibility that something else changes
             # such as whether the block is breakable, or what kind of platform something is
+            # 66% chance the position of the block moves
+            # remaning 33% something specific happens, explained near the code
 
             # BLOCK
+            # Toggles whether a block is breakable or not
             if de_type == "4_block":
                 # Grab the y value and whether it is breakable.
                 y = de[2]
@@ -251,6 +314,7 @@ class Individual_DE(object):
                 new_de = (x, de_type, y, breakable)
 
             # Question Block
+            # Toggles whether the block has power up or not
             elif de_type == "5_qblock":
                 y = de[2]
                 has_powerup = de[3]  # boolean
@@ -262,6 +326,8 @@ class Individual_DE(object):
                     has_powerup = not de[3]
                 new_de = (x, de_type, y, has_powerup)
 
+            # Coin
+            # No special case
             elif de_type == "3_coin":
                 y = de[2]
                 if choice < 0.5:
@@ -270,6 +336,8 @@ class Individual_DE(object):
                     y = offset_by_upto(y, height / 2, min=0, max=height - 1)
                 new_de = (x, de_type, y)
 
+            # Pipe
+            # No special case
             elif de_type == "7_pipe":
                 h = de[2]
                 if choice < 0.5:
@@ -278,6 +346,9 @@ class Individual_DE(object):
                     h = offset_by_upto(h, 2, min=2, max=height - 4)
                 new_de = (x, de_type, h)
 
+            # Hole
+            # No special case,
+            # can toggle with
             elif de_type == "0_hole":
                 w = de[2]
                 if choice < 0.5:
@@ -286,6 +357,8 @@ class Individual_DE(object):
                     w = offset_by_upto(w, 4, min=1, max=width - 2)
                 new_de = (x, de_type, w)
 
+            # Stairs
+            # Toggles the ?alignment? of the stairs?
             elif de_type == "6_stairs":
                 h = de[2]
                 dx = de[3]  # -1 or 1
@@ -297,6 +370,8 @@ class Individual_DE(object):
                     dx = -dx
                 new_de = (x, de_type, h, dx)
 
+            # Platforms
+            # Toggles the type of platforms
             elif de_type == "1_platform":
                 w = de[2]
                 y = de[3]
@@ -311,6 +386,7 @@ class Individual_DE(object):
                     madeof = random.choice(["?", "X", "B"])
                 new_de = (x, de_type, w, y, madeof)
 
+            # Does not mutate the enemy
             elif de_type == "2_enemy":
                 pass
             new_genome.pop(to_change)
@@ -319,14 +395,25 @@ class Individual_DE(object):
 
     def generate_children(self, other):
         # STUDENT How does this work?  Explain it in your writeup.
+
+        # Gets the a point in both parents.
         pa = random.randint(0, len(self.genome) - 1)
         pb = random.randint(0, len(other.genome) - 1)
+
+        # combine for one child using the first point
+        # In this child the first part of the child is the part before pb
+        # (point selected in the other) and the latter part is the part of genome
+        # that is further away than point pa (the point selected in this genome)
         a_part = self.genome[:pa] if len(self.genome) > 0 else []
         b_part = other.genome[pb:] if len(other.genome) > 0 else []
         ga = a_part + b_part
+
+        # combine for the other child
+        # The same process as above, only switched ordering
         b_part = other.genome[:pb] if len(other.genome) > 0 else []
         a_part = self.genome[pa:] if len(self.genome) > 0 else []
         gb = b_part + a_part
+
         # do mutation
         return Individual_DE(self.mutate(ga)), Individual_DE(self.mutate(gb))
 
@@ -404,26 +491,45 @@ class Individual_DE(object):
 Individual = Individual_Grid
 
 def roulette_succession(pop):
-    generation_size = len(pop)
-    max_fitness = sum(chromosome.fitness() for chromosome in pop)
 
+    generation_size = len(pop)
     new_generation = []
-    last_pick = random.choice(pop)
-    
+
+    if ELITISM:
+        ELITISIM_PERCENTAGE = 5
+        elitism_count = int(generation_size / (100 / ELITISIM_PERCENTAGE))
+        new_generation = heapq.nlargest(elitism_count, pop, key = lambda genome: genome.fitness())
+
+
+    min_fitness = min(chromosome.fitness() for chromosome in pop)
+    sum_fitness = sum(chromosome.fitness() for chromosome in pop)
+
+    last_pick = max(pop, key = lambda genome: genome.fitness())
+
     while len(new_generation) < generation_size:
-        pick = random.uniform(0, max_fitness)
+        pick = random.uniform(0, sum_fitness)
         current = 0
         for chromosome in pop:
-            current += chromosome.fitness()
+            if len(new_generation) == generation_size:
+                break
+            #The addition of min fitness is a regularizer to ensure
+            # the negative values are not messing with the calculations
+            current += (chromosome.fitness() +  min_fitness)
+
             if current > pick:
                 new_child = chromosome.generate_children(last_pick)
                 last_pick = chromosome
                 new_generation += new_child
                 continue
+
+    new_sum_fitness = sum(chromosome.fitness() for chromosome in new_generation)
+    mean_fitness = new_sum_fitness / generation_size
+    print("The mean fitness is : {}".format(mean_fitness))
+    print(len(new_generation))
     return new_generation
-    
+
 def tournament_succession(pop):
-    return
+    return pop
 
 # List of individual grid objects
 def generate_successors(population):
@@ -475,6 +581,7 @@ def ga():
                     print("Max fitness:", str(best.fitness()))
                     print("Average generation time:", (now - start) / generation)
                     print("Net time:", now - start)
+                    print()
                     with open("levels/last.txt", 'w') as f:
                         for row in best.to_level():
                             f.write("".join(row) + "\n")
