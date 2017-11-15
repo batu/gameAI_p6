@@ -14,7 +14,7 @@ height = 16
 ELITISM = True
 #Do you want elitism?
 
-SUCCESSION_METHOD = 1
+SUCCESSION_METHOD = 3
 # 1 for Roulette Wheel
 # 2 for Tournament
 # 0 for just mutation
@@ -252,7 +252,7 @@ def clip(lo, val, hi):
 
 class Individual_DE(object):
     # Calculating the level isn't cheap either so we cache it too.
-    __slots__ = ["genome", "_fitness", "_level"]
+    __slots__ = ["genome", "_fitness", "_level","applied_Fitness"]
 
     # Genome is a heapq of design elements sorted by X, then type, then other parameters
     def __init__(self, genome):
@@ -260,6 +260,8 @@ class Individual_DE(object):
         heapq.heapify(self.genome)
         self._fitness = None
         self._level = None
+        applied_Fitness=0
+
 
     # Calculate and cache fitness
     def calculate_fitness(self):
@@ -290,6 +292,7 @@ class Individual_DE(object):
         #Coins are fun! Add more of them
         coin_count = len(list(filter(lambda de: de[1] == "3_coin", self.genome)))
         penalties += coin_count * 0.05 if coin_count < 30 else -1
+
 
 
         # STUDENT If you go for the FI-2POP extra credit, you can put constraint calculation in here too and cache it in a new entry in __slots__.
@@ -453,8 +456,8 @@ class Individual_DE(object):
         # STUDENT How does this work?  Explain it in your writeup.
 
         # Gets the a point in both parents.
-        pa = random.randint(0, len(self.genome) - 1)
-        pb = random.randint(0, len(other.genome) - 1)
+        pa = random.randint(0, len(self.genome) - 1) if len(self.genome) > 0 else 0
+        pb = random.randint(0, len(other.genome) - 1) if len(other.genome) > 0 else 0
 
         # combine for one child using the first point
         # In this child the first part of the child is the part before pb
@@ -588,6 +591,129 @@ def roulette_succession(pop):
     return new_generation
 
 def tournament_succession(pop):
+
+    #binary Torny
+
+    '''
+    select two randoms
+    find fitness of randoms
+    choose highest fitness
+    return results
+    '''
+    new_generation=[]
+    while(len(new_generation)<len(pop)):
+        loopOnce=True
+        Parent_B = pop[0]
+        Parent_A=Parent_B
+        while(loopOnce):
+
+            loopOnce=False
+            chosen_A=random.randint(0,len(pop)-1)
+            chosen_B = random.randint(0, len(pop)-1)
+
+            chosen_A=pop[chosen_A]
+            chosen=chosen_A
+            chosen_B=pop[chosen_B]
+
+
+            if(chosen_B.fitness()>chosen_A.fitness()):
+                chosen=chosen_B
+            '''
+            print(chosen_A.fitness())
+            print(chosen_B.fitness())
+            print(chosen.fitness())
+            '''
+            if(loopOnce):
+                Parent_A=chosen
+            else:
+                Parent_B=chosen
+        if(len(Parent_B.genome)!=0 and Parent_A.genome!=0):
+            kid=Parent_A.generate_children(Parent_B)
+            new_generation+=kid
+    return new_generation
+
+def rank_succession(pop):
+    pop=rank_merge_sort(pop)
+    generation_size = len(pop)
+    new_generation = []
+    for x in new_generation:
+        print(x.fitness())
+
+
+    if ELITISM:
+        ELITISIM_PERCENTAGE = 5
+        elitism_count = int(generation_size / (100 / ELITISIM_PERCENTAGE))
+        new_generation = heapq.nlargest(elitism_count, pop, key = lambda genome: genome.applied_Fitness)
+
+
+    min_fitness = min(chromosome.applied_Fitness for chromosome in pop)
+    sum_fitness = sum(chromosome.applied_Fitness for chromosome in pop)
+
+    last_pick = max(pop, key = lambda genome: genome.applied_Fitness)
+    print("here")
+    while len(new_generation) < generation_size:
+        pick = random.uniform(0, sum_fitness)
+        current = 0
+        for chromosome in pop:
+            if len(new_generation) == generation_size:
+                break
+            #The addition of min fitness is a regularizer to ensure
+            # the negative values are not messing with the calculations
+            current += (chromosome.applied_Fitness +  min_fitness)
+
+            if current > pick and len(chromosome.genome) != 0 and len(last_pick.genome) != 0:
+                new_child = chromosome.generate_children(last_pick)
+                last_pick = chromosome
+                new_generation += new_child
+                continue
+
+
+    new_sum_fitness = sum(chromosome.fitness() for chromosome in new_generation)
+    mean_fitness = new_sum_fitness / generation_size
+    print("after")
+    print("The mean fitness is : {}".format(mean_fitness))
+    return new_generation
+
+def rank_merge_sort(pop):
+    if(len(pop)>1):
+        '''
+        popIndex=[]
+        for x in range(0,len(pop)):
+            print(x)
+            popIndex.append(int(x))
+        '''
+        mid=len(pop)/2
+        left=pop[:int(mid)]
+        right=pop[int(mid):]
+
+        rank_merge_sort(left)
+        rank_merge_sort(right)
+
+        i=0
+        j=0
+        k=0
+        while i<len(left)and j<len(right):
+
+            if(left[i].fitness())<right[j].fitness():
+                pop[k]=left[i]
+                i=i+1
+            else:
+                pop[k]=right[j]
+                j=j+1
+            k=k+1
+        while i<len(left):
+            pop[k]=left[i]
+            i=i+1
+            k=k+1
+        while j<len(right):
+            pop[k]=right[j]
+            j=j+1
+            k=k+1
+    i=1
+    for x in pop:
+        x.applied_Fitness=i
+        i+=1
+
     return pop
 
 def mutation_succession(pop):
@@ -608,6 +734,11 @@ def generate_successors(population):
         results = tournament_succession(population)
     elif SUCCESSION_METHOD == 0:
         results = mutation_succession(population)
+    elif SUCCESSION_METHOD ==3:
+        results = rank_succession(population)
+
+
+
 
     # STUDENT Design and implement this
     # Hint: Call generate_children() on some individuals and fill up results.
