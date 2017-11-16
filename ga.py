@@ -14,7 +14,7 @@ height = 16
 ELITISM = True
 #Do you want elitism?
 
-SUCCESSION_METHOD = 3
+SUCCESSION_METHOD = 2
 # 1 for Roulette Wheel
 # 2 for Tournament
 # 0 for just mutation
@@ -62,11 +62,12 @@ options = \
 
 
 class Individual_Grid(object):
-    __slots__ = ["genome", "_fitness"]
+    __slots__ = ["genome", "_fitness","applied_Fitness"]
 
     def __init__(self, genome):
         self.genome = copy.deepcopy(genome)
         self._fitness = None
+        applied_Fitness = 0
 
     # Update this individual's estimate of its fitness.
     # This can be expensive so we do it once and then cache the result.
@@ -78,7 +79,7 @@ class Individual_Grid(object):
         # STUDENT Modify this, and possibly add more metrics.  You can replace this with whatever code you like.
         coefficients = dict(
             meaningfulJumpVariance=0.5,
-            negativeSpace=1.2,
+            negativeSpace=0.9,
             pathPercentage=0.5,
             emptyPercentage=0.6,
             linearity=-0.5,
@@ -150,7 +151,7 @@ class Individual_Grid(object):
         # do crossover with other
         this_genome = self.genome
         other_genome = other.genome
-
+        
         if CROSSOVER_METHOD == 1:
             left = 1
             right = width - 3
@@ -271,7 +272,7 @@ class Individual_DE(object):
         # STUDENT Improve this with any code you like
         coefficients = dict(
             meaningfulJumpVariance=0.5,
-            negativeSpace=0.9,
+            negativeSpace=0.6,
             pathPercentage=0.5,
             emptyPercentage=0.6,
             linearity=-0.5,
@@ -288,6 +289,7 @@ class Individual_DE(object):
 
         one_wide_gap_count = len(list(filter(lambda de: de[1] == "0_holes" and de[2] == 1, self.genome)))
         penalties -= min(1, one_wide_gap_count * 0.1)
+
 
         #Coins are fun! Add more of them
         coin_count = len(list(filter(lambda de: de[1] == "3_coin", self.genome)))
@@ -309,7 +311,7 @@ class Individual_DE(object):
         # STUDENT How does this work?  Explain it in your writeup.
         # STUDENT consider putting more constraints on this, to prevent generating weird things
 
-        # It has a mutation chance of 15%.
+        # It has a mutation chance of 10%.
         # and ensures the genome has length.
 
         # A genome has at most:
@@ -473,9 +475,6 @@ class Individual_DE(object):
         a_part = self.genome[pa:] if len(self.genome) > 0 else []
         gb = b_part + a_part
 
-        print(len(ga))
-        print(len(gb))
-        print()
         # do mutation
         return Individual_DE(self.mutate(ga)), Individual_DE(self.mutate(gb))
 
@@ -726,6 +725,7 @@ def mutation_succession(pop):
 # List of individual grid objects
 def generate_successors(population):
     #pop.sort(key=lambda x: x.fitness(), reverse=True)
+   # print(population)
 
     results = []
     if SUCCESSION_METHOD == 1:
